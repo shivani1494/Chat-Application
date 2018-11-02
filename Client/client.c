@@ -21,8 +21,6 @@ int bytesRcvd, totalBytesRcvd; /* Bytes read in single recv() and total bytes re
 
 char *portNum; /* Echo server port */
 char *serverIP; /* Server IP address (dotted quad) */
-char *name;
-char *password;
 bool ifLoggedIn;
 char *clientOption;
 
@@ -42,21 +40,21 @@ void PrintUserOptionsAndRedirectRequests();
 void LogOn();
 void StartChat();
 void ChatWithFriend();
-void ReceiveMessage(int clntSocket);
+bool ReceiveMessage(int clntSocket);
 void SendMessageToServer();
-void Receive(int sock, char *receivedData, bool print);
+bool Receive(int sock, char *receivedData, bool print);
 void InputAndSend(int sock);
 
 //================= HELPER FUNCTIONS ==============//
 
-void Receive(int sock, char *receivedData, bool print)
+bool Receive(int sock, char *receivedData, bool print)
 {
     int recvMsgSize; /* Size of received message */
     recvMsgSize = recv(sock, receivedData, RCVBUFSIZE, 0);
     if(recvMsgSize == 0)
     {
-        printf("Socket Closed, disconnecting");
-        return;
+        printf("Socket Closed, disconnecting from your friend\n"); 
+        return true;
     }
     else if (recvMsgSize < 0)
         DieWithError("recv() failed");
@@ -69,7 +67,13 @@ void Receive(int sock, char *receivedData, bool print)
     }
     //handle bye properly!
     if(receivedData[0] == 'b' && receivedData[1] == 'y' && receivedData[2] == 'e')
+    {
         close(sock); /* Close client socket */
+        printf("Socket Closed, disconnecting from your friend\n"); 
+        return true;
+    }
+    return false;
+        
 }
 
 void InputAndSend(int sock)
@@ -162,6 +166,11 @@ void PrintUserOptionsAndRedirectRequests()
 
 void StartChat()
 {
+    if (send(sock, clientOption, strlen(clientOption), 0) != strlen(clientOption))
+        DieWithError("send() sent a different number of bytes than expected");
+
+    char *data = malloc(RCVBUFSIZE);
+    Receive(sock, data, true);
     /* Create socket for incoming connections */
     if ((servSock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
         DieWithError( "socket () failed");
@@ -178,7 +187,7 @@ void StartChat()
     /* Mark the socket so it will listen for incoming connections */
     if (listen(servSock, MAXPENDING) < 0)
         DieWithError("listen() failed");
-
+    bool socketClosed = false;
     for (;;) /* Run forever */
     {
         /* Set the size of the in-out parameter */
@@ -188,31 +197,37 @@ void StartChat()
             DieWithError("accept() failed");
         /* clntSock is connected to a client! */
         //printf("Handling client %s\n", inet_ntoa(echoClntAddr.sin_addr));
-        ReceiveMessage(clntSock);
+        socketClosed = ReceiveMessage(clntSock);
+        if (socketClosed)
+            return;
     }
 }
 
-void ReceiveMessage(int sock)
+bool ReceiveMessage(int sock)
 {
     char *data = malloc(RCVBUFSIZE);
     int recvMsgSize; /* Size of received message */
-
+    bool socketClosed = false;
     //receiving friend option - 5    
-    Receive(sock, data, true);
+    Receive(sock, data, false);
         
     //Receiving friend name
-    Receive(sock, data, true);
+    Receive(sock, data, false);
     printf("%s has logged in to chat. \n", data);
     
     //ignore password this is a small hack to use the same function below
-    Receive(sock, data, true);
+    Receive(sock, data, false);
 
     while(true)
     {
-        Receive(sock, data, true);
-        printf("\n Please enter your message: (type BYE to exit) \n");  
+        socketClosed = Receive(sock, data, true);
+        if(socketClosed)
+            return true;
+        printf("\nPlease enter your message: (type BYE to exit): ");  
         InputAndSend(sock);
     }
+    
+    return false;
 }
 
 void ChatWithFriend()
@@ -221,14 +236,17 @@ void ChatWithFriend()
     ifLoggedIn = false;
     unsigned short portN = 8000;
     ConnectAndLogOn(portN);
+    bool socketClosed = false;
     
     //Exchange messages with friend
-    char *receivedData = malloc(RCVBUFSIZE);
+    char *data = malloc(RCVBUFSIZE);
     while(true)
     {
-        printf("\n Please enter your message: (type BYE to exit) \n");    
+        printf("\n Please enter your message: (type BYE to exit): ");    
         InputAndSend(sock);
-        Receive(sock, receivedData, true);        
+        socketClosed = Receive(sock, data, true);
+        if (socketClosed)
+            return;        
     }
 }
 
@@ -272,13 +290,9 @@ void ConnectAndLogOn(unsigned short portNumint)
     ifLoggedIn = true;
     portNum = NULL;
     serverIP = NULL;
-    name = NULL;
-    password = NULL;
     sock = NULL;
 
     /* Dynamic Allocation */
-    name = malloc(SIZE);
-    password = malloc(SIZE);
     serverIP = malloc(SIZE);
     portNum = malloc(SIZE);
     sock = malloc(SIZE);
@@ -295,6 +309,7 @@ void ConnectAndLogOn(unsigned short portNumint)
     // fflush(stdin);
     // fflush(stdout);
     
+    //hard coding to avoid typing every time!
     serverIP = "127.0.0.1";
     // portNumint = 9000;
 
@@ -315,18 +330,14 @@ void ConnectAndLogOn(unsigned short portNumint)
     /* Establish the connection to the server */
     if (connect(sock, (struct sockaddr *) &serverAddr, sizeof(serverAddr)) < 0)
         DieWithError("connect () failed");
-    //==============important=========uncomment this
     else
-        printf("Connected!\n");
-        //printf("Connected! \n");
+        printf("Connected!\n");\
 
     // if(close(sock) < 0)
     //     DieWithError("Connection to server was not closed properly");
     
     //fflush(stdout);
-    
     LogOn();
-
 }
 
 int main(int argc, char *argv[])
@@ -346,4 +357,20 @@ int main(int argc, char *argv[])
 //send and receive
 //how is the socket created?
 //how is that enabling a connect between the sender and receiver
+//note that the sends and the receives have to be timed
+//such that the server is actually waiting to receive and the 
+//client has not sent its message yet
+//if the client has already sent its message and the control has not
+//reached to the receive call yet then the server will infinitely wait
+//to receive the message however the message has already been sent from the server
+//how is this actually handled in practise because there can be multiple
+//such situations in which the client is faster or vice versa in that case 
+//like the server could be disconnecting from the previous client and 
+//is can be used now because the socket from previous client is closed
+//but the server is not ready yet to receive incoming requests
+//while the second client has already sent some!
+
+//when socket is closed-- is a message sent to the client/server waiting on it
+//because when the socket is closed there is no send
+//but some message must be received to detect that the receive == 0, how is this actually happening?
 

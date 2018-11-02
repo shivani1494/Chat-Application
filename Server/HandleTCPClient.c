@@ -22,13 +22,6 @@ int recvMsgSize; /* Size of received message */
 char messageFromAlice[MSGBUFSIZE];
 char messageFromBob[MSGBUFSIZE];
 
-struct UserDetails 
-{
-    char* username;
-    char* password;
-};
-
-struct UserDetails allUsers[90];
 char  *currentUser;
 
 void GetUserList(int clntSocket) 
@@ -47,14 +40,13 @@ void LogOn(int clntSocket)
     char pass[RCVBUFSIZE]; /* Buffer for pass */
     int recvMsgSize; /* Size of received message */
 
-    
     if ((recvMsgSize = recv(clntSocket, name, RCVBUFSIZE, 0)) < 0)
         DieWithError("recv() failed");
 
     if ((recvMsgSize = recv(clntSocket, pass, RCVBUFSIZE, 0)) < 0)
         DieWithError("recv() failed");
 
-    name[recvMsgSize] = '\0'; 
+    name[recvMsgSize+1] = '\0'; 
     printf("%s has logged in!", name);
     printf("\n");
 
@@ -67,29 +59,17 @@ void LogOn(int clntSocket)
 
 void ReceiveMessage(int sock)
 {
-    //maintain a data structure to store messages for Bob and Alice in LIFO data structure
-    printf("Receive Message");
-   
+    //maintain a data structure to store messages for Bob and Alice in LIFO data structure       
     if(currentUser == "Alice")
-    {
-        printf("here receivign for alice");
+    {        
         if ((recvMsgSize = recv(sock, messageFromAlice, MSGBUFSIZE - 1, 0)) < 0)
             DieWithError("recv() failed ... here");
     }    
     else
-    {
-        printf("why are you here");
+    {        
         if ((recvMsgSize = recv(sock, messageFromBob, MSGBUFSIZE - 1, 0)) < 0)
             DieWithError("recv() failed ... here");
     }
-    
-    // if ((recvMsgSize = recv(sock, messageFromBob, MSGBUFSIZE - 1, 0)) < 0)
-    //     DieWithError("recv() failed ... here");
-
-    // char *received = malloc(RCVBUFSIZE);
-    // received = "Message received \n";
-    // if (send(sock, received, strlen(received), 0) != strlen(received))
-    //     DieWithError("send() failed");
 
 }
 
@@ -100,7 +80,7 @@ void SendMessage(int clntSocket)
 
     if(currentUser == "Bob")
     {
-        printf("here sending for bob");
+        //printf("here sending for bob");
         if (send(clntSocket, messageFromAlice, strlen(messageFromAlice), 0) != strlen(messageFromAlice))
             DieWithError("send() failed");
 
@@ -123,15 +103,13 @@ void StartChat(int clntSocket)
     if (send(clntSocket, disconnectMsg, strlen(disconnectMsg), 0) != strlen(disconnectMsg))
         DieWithError("send() failed");
     
-    printf("Here!");
+    //printf("Here!");
 
     // /* See if there is more data to receive */
     // //why do we need a receive here?????
     // if ((recvMsgSize = recv(clntSocket, clientOption, RCVBUFSIZE, 0)) < 0)
     //     DieWithError("recv() failed");
-
-    sleep(15);
-
+    //sleep(15);
     //calling close socket here results in weird behavior, why so?
     //close(clntSocket); /* Close client socket */
     //what happens if you don't close the client socket?
@@ -141,13 +119,7 @@ void StartChat(int clntSocket)
 void HandleTCPClient(int clntSocket)
 {
     currentUser = malloc(RCVBUFSIZE);
-
-    allUsers[0].username = "Alice";
-    allUsers[1].username = "Bob";
-
-    allUsers[0].password = "1234";
-    allUsers[1].password = "5678";
-
+    
     while (true)
     {
         //are we suppose to debug the template code as well??
@@ -169,24 +141,16 @@ void HandleTCPClient(int clntSocket)
         switch(i)
         {
             case 0: 
-                printf(" entering 0\n");
                 LogOn(clntSocket);
-                printf(" exiting 0\n");
                 break;
-            case 1: 
-                printf(" entering 1\n");
-                GetUserList(clntSocket);
-                printf(" exiting 1\n");
+            case 1:                 
+                GetUserList(clntSocket);                
                 break;
-            case 2:    
-                printf(" entering 2\n");
-                ReceiveMessage(clntSocket);
-                printf(" exiting 2\n");
+            case 2:                    
+                ReceiveMessage(clntSocket);                
                 break;
-            case 3: 
-                printf(" entering 3\n");
-                SendMessage(clntSocket);
-                printf(" exiting 3\n");
+            case 3:                 
+                SendMessage(clntSocket);                
                 break;
             case 4:
                 StartChat(clntSocket);
@@ -197,8 +161,7 @@ void HandleTCPClient(int clntSocket)
                 break;
             default:
                 printf("Invalid Option");
-        }
-        
+        }        
         if(i == 4)
         {
             close(clntSocket);

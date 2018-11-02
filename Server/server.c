@@ -45,7 +45,7 @@ int main(int argc, char *argv[])
         DieWithError("listen() failed") ;
     for (;;) /* Run forever */
     {
-        printf("running the latest copy \n");
+        //printf("running the latest copy \n");
         /* Set the size of the in-out parameter */
         clntLen = sizeof(echoClntAddr);
         /* Wait for a client to connect */
